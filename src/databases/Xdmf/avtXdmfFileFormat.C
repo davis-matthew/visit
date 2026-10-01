@@ -1112,21 +1112,48 @@ long avtXdmfFileFormat::GetNumberOfPoints(XdmfGrid * grid)
 //  Creation:   March 29, 2010
 //
 // ****************************************************************************
+#define ISQRT_MAX 0xFFFFFFFFULL
+static inline uint64_t isqrt(uint64_t x) {
+    uint64_t r;
+
+    if (x == 0) {
+        return 0;
+    }
+
+    r = (uint64_t) std::sqrt((double) x);
+
+    /* A seed above ISQRT_MAX would overflow when squared; it is also always
+     * wrong, since no root exceeds ISQRT_MAX. */
+    if (r > ISQRT_MAX) {
+        r = ISQRT_MAX;
+    }
+
+    while (r > 0 && r * r > x) {
+        --r;
+    }
+    /* r+1 == 2^32 would square to exactly 2^64 and wrap to 0, which would make
+     * the comparison succeed and walk r off the end. */
+    while (r < ISQRT_MAX && (r + 1) * (r + 1) <= x) {
+        ++r;
+    }
+    return r;
+}
 
 int avtXdmfFileFormat::GetNumberOfSymmetricalTensorComponents(int numComponents)
 {
+    //A127733
     int tensorSize = 1;
-    int sum = 0;
-    while (true) {
-        sum += tensorSize;
-        if (sum == numComponents) {
-            return tensorSize*tensorSize;
-        }
-        if (sum > numComponents) {
-            return 0;
-        }
-        tensorSize++;
-    }
+    if (numComponents <= 0)
+        return 0;
+
+    int disc = 8 * numComponents + 1;
+    int root = isqrt(disc);
+
+    if (root * root != disc)
+        return 0;                              // not a triangular number
+
+    const uint64_t k = (root - 1ULL) / 2ULL;   // disc is odd, so root is odd
+    return static_cast<int>(k * k);
 }
 
 // ****************************************************************************
